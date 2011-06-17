@@ -7,15 +7,105 @@
 
 const char* ip_to_str(const uint8_t*);
 
+int pingInterval = 5 * 1000;
+unsigned long lastPingTime = 0;
+
+int notConnectedMode = 0;
+int connectedMode = 1;
+int mode = 0;
+
 int redPin   = 5;
 int amberPin = 8;
 int greenPin = 3;
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-byte localhost[] = { 192, 168, 1, 9 };
-String currentState = "building";
+byte cijoe[] = { 220, 245, 19, 192 };
 
-Client client(localhost, 4567);
+Client client(cijoe, 80);
+
+void setup() {
+  pinMode(redPin,   OUTPUT);
+  pinMode(amberPin, OUTPUT);
+  pinMode(greenPin, OUTPUT);
+
+  resetPins();
+
+  Serial.begin(9600);
+  EthernetDHCP.begin(mac);
+
+  if (DEBUG) {
+    print_ip_conf();
+  }
+}
+
+void loop() {
+  String result = "";
+  EthernetDHCP.maintain();
+
+  if (mode == notConnectedMode) {
+    Serial.println("connecting");
+    if (client.connect()) {
+      Serial.println("connected");
+      client.println("GET /ping HTTP/1.0");
+      client.println();
+      mode = connectedMode;
+    } else {
+      Serial.println("connection failed...");
+    }
+  } else {
+    while (client.available()) {
+      char inChar = client.read();
+      result += inChar;
+      delay(50);
+    }
+    if (result.length() > 0) {
+      Serial.println(result);
+      resetPins();
+
+      // Both building and failing tests contain a 412 response
+      if (result.indexOf("HTTP/1.1 412") >= 0) {
+        if (result.indexOf("building") >= 0) {
+          building();
+        } else {
+          failing();
+        }
+      } else {
+        if (result.indexOf("HTTP/1.1 200") >= 0) {
+          passing();
+        }
+      }
+    }
+
+    mode = notConnectedMode;
+    client.stop();
+    Serial.println("disconnecting");
+  }
+
+  delay(1000);
+}
+
+const char* ip_to_str(const uint8_t* ipAddr) {
+  static char buf[16];
+  sprintf(buf, "%d.%d.%d.%d\0", ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3]);
+  return buf;
+}
+
+void print_ip_conf() {
+  const byte* ipAddr      = EthernetDHCP.ipAddress();
+  const byte* gatewayAddr = EthernetDHCP.gatewayIpAddress();
+  const byte* dnsAddr     = EthernetDHCP.dnsIpAddress();
+
+  Serial.println("A DHCP lease has been obtained.");
+
+  Serial.print("My IP address is ");
+  Serial.println(ip_to_str(ipAddr));
+
+  Serial.print("Gateway IP address is ");
+  Serial.println(ip_to_str(gatewayAddr));
+
+  Serial.print("DNS IP address is ");
+  Serial.println(ip_to_str(dnsAddr));
+}
 
 void resetPins() {
   digitalWrite(redPin,   LOW);
@@ -36,79 +126,4 @@ void failing() {
 void passing() {
   Serial.println("passing");
   digitalWrite(greenPin, HIGH);
-}
-
-void setup() {
-  pinMode(redPin,   OUTPUT);
-  pinMode(amberPin, OUTPUT);
-  pinMode(greenPin, OUTPUT);
-
-  resetPins();
-
-  Serial.begin(9600);
-  EthernetDHCP.begin(mac);
-
-  if (DEBUG) {
-    print_ip_conf();
-  }
-
-  if (client.connect()) {
-    Serial.println("Working...");
-    client.println("GET /ping HTTP/1.0");
-    client.println();
-  } else {
-    Serial.println("Not working fucker");
-  }
-}
-
-void loop() {
-  String result = "";
-
-  EthernetDHCP.maintain();
-
-  while (client.available()) {
-    char inChar = client.read();
-    result += inChar;
-    delay(50);
-  }
-
-  if (result.length() > 0) {
-    Serial.println(result);
-
-    // Both building and failing tests contain a 412 response
-    if (result.indexOf("HTTP/1.1 412") >= 0) {
-      if (result.indexOf("building") >= 0) {
-        building();
-      } else {
-        failing();
-      }
-    } else {
-      if (result.indexOf("HTTP/1.1 200") >= 0) {
-        passing();
-      }
-    }
-  }
-}
-
-void print_ip_conf() {
-  const byte* ipAddr      = EthernetDHCP.ipAddress();
-  const byte* gatewayAddr = EthernetDHCP.gatewayIpAddress();
-  const byte* dnsAddr     = EthernetDHCP.dnsIpAddress();
-
-  Serial.println("A DHCP lease has been obtained.");
-
-  Serial.print("My IP address is ");
-  Serial.println(ip_to_str(ipAddr));
-
-  Serial.print("Gateway IP address is ");
-  Serial.println(ip_to_str(gatewayAddr));
-
-  Serial.print("DNS IP address is ");
-  Serial.println(ip_to_str(dnsAddr));
-}
-
-const char* ip_to_str(const uint8_t* ipAddr) {
-  static char buf[16];
-  sprintf(buf, "%d.%d.%d.%d\0", ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3]);
-  return buf;
 }
