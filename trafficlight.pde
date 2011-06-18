@@ -3,20 +3,11 @@
 #include <EthernetDHCP.h>
 #include <EthernetDNS.h>
 
-#define DEBUG 1
-
 const char* ip_to_str(const uint8_t*);
 
-int pingInterval = 5 * 1000;
-unsigned long lastPingTime = 0;
-
-int notConnectedMode = 0;
-int connectedMode = 1;
-int mode = 0;
-
-int redPin   = 5;
-int amberPin = 8;
-int greenPin = 3;
+int redPin       = 5;
+int amberPin     = 8;
+int greenPin     = 3;
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 byte cijoe[] = { 220, 245, 19, 192 };
@@ -29,35 +20,37 @@ void setup() {
   pinMode(greenPin, OUTPUT);
 
   resetPins();
+  building();
 
   Serial.begin(9600);
   EthernetDHCP.begin(mac);
 
-  if (DEBUG) {
-    print_ip_conf();
-  }
+  print_ip_conf();
 }
 
 void loop() {
-  String result = "";
   EthernetDHCP.maintain();
+  pollCIServer();
+  // delay(1000);
+}
 
-  if (mode == notConnectedMode) {
-    Serial.println("connecting");
-    if (client.connect()) {
-      Serial.println("connected");
-      client.println("GET /ping HTTP/1.0");
-      client.println();
-      mode = connectedMode;
-    } else {
-      Serial.println("connection failed...");
-    }
-  } else {
+void pollCIServer() {
+  String result = "";
+
+  Serial.println("connecting");
+  if (client.connect()) {
+    Serial.println("connected");
+    client.println("GET /ping HTTP/1.0");
+    client.println();
+
+    delay(500);
+
     while (client.available()) {
       char inChar = client.read();
       result += inChar;
       delay(50);
     }
+
     if (result.length() > 0) {
       Serial.println(result);
       resetPins();
@@ -76,12 +69,11 @@ void loop() {
       }
     }
 
-    mode = notConnectedMode;
     client.stop();
     Serial.println("disconnecting");
+  } else {
+    Serial.println("connection failed...");
   }
-
-  delay(1000);
 }
 
 const char* ip_to_str(const uint8_t* ipAddr) {
