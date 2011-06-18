@@ -8,6 +8,7 @@ const char* ip_to_str(const uint8_t*);
 int redPin       = 5;
 int amberPin     = 8;
 int greenPin     = 3;
+int currentState = amberPin;
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 byte cijoe[] = { 220, 245, 19, 192 };
@@ -31,7 +32,6 @@ void setup() {
 void loop() {
   EthernetDHCP.maintain();
   pollCIServer();
-  // delay(1000);
 }
 
 void pollCIServer() {
@@ -53,18 +53,23 @@ void pollCIServer() {
 
     if (result.length() > 0) {
       Serial.println(result);
-      resetPins();
 
       // Both building and failing tests contain a 412 response
       if (result.indexOf("HTTP/1.1 412") >= 0) {
         if (result.indexOf("building") >= 0) {
-          building();
+          if (currentState != amberPin) {
+            building();
+          }
         } else {
-          failing();
+          if (currentState != redPin) {
+            failing();
+          }
         }
       } else {
         if (result.indexOf("HTTP/1.1 200") >= 0) {
-          passing();
+          if (currentState != greenPin) {
+            passing();
+          }
         }
       }
     }
@@ -106,16 +111,22 @@ void resetPins() {
 }
 
 void building() {
+  resetPins();
   Serial.println("building");
+  currentState = amberPin;
   digitalWrite(amberPin, HIGH);
 }
 
 void failing() {
+  resetPins();
   Serial.println("failing");
+  currentState = redPin;
   digitalWrite(redPin, HIGH);
 }
 
 void passing() {
+  resetPins();
   Serial.println("passing");
+  currentState = greenPin;
   digitalWrite(greenPin, HIGH);
 }
